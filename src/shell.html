@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>wasm test</title>
+</head>
+
+<body>
+  <script type='text/javascript'>
+    var Module = {
+      print: (function () {
+        return (text) => {console.log(text)};
+      })()
+    };
+  </script>
+  {{{ SCRIPT }}}
+</body>
+
+</html>

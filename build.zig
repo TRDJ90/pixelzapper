@@ -1,62 +1,49 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
+pub fn build(b: *std.Build) !void {
+    // const target = b.standardTargetOptions(.{});
+    const target = b.resolveTargetQuery(.{ .cpu_arch = .wasm32, .os_tag = .emscripten });
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib_mod = b.createModule(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const exe_mod = b.createModule(.{
+    const wasm_test = b.addStaticLibrary(.{
+        .name = "test",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
+    wasm_test.linkLibC();
 
-    exe_mod.addImport("pixelzapper_lib", lib_mod);
+    // Hardcode for now path to emscripten includes.
+    const emscripten_include = "/opt/homebrew/Cellar/emscripten/4.0.9/libexec/cache/sysroot/include";
+    wasm_test.addSystemIncludePath(.{ .cwd_relative = emscripten_include });
 
-    const lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "pixelzapper",
-        .root_module = lib_mod,
+    // Define emscripten compile command
+    const emcc_cmd = b.addSystemCommand(&[_][]const u8{"emcc"});
+    emcc_cmd.addFileArg(wasm_test.getEmittedBin());
+    emcc_cmd.addArgs(&[_][]const u8{
+        "-o",
+        b.fmt("web/{s}.html", .{wasm_test.name}),
+        "-Oz",
+        "--shell-file=src/shell.html",
+        "-sASYNCIFY",
     });
+    emcc_cmd.step.dependOn(&wasm_test.step);
 
-    b.installArtifact(lib);
-
-    const exe = b.addExecutable(.{
-        .name = "pixelzapper",
-        .root_module = exe_mod,
-    });
-
-    b.installArtifact(exe);
-
-    const run_cmd = b.addRunArtifact(exe);
-
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
+    // 'emcc' flags necessary for debug builds.
+    if (optimize == .Debug or optimize == .ReleaseSafe) {
+        emcc_cmd.addArgs(&[_][]const u8{
+            "-sUSE_OFFSET_CONVERTER",
+            "-sASSERTIONS",
+        });
     }
 
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    b.getInstallStep().dependOn(&emcc_cmd.step);
 
-    const lib_unit_tests = b.addTest(.{
-        .root_module = lib_mod,
-    });
+    // Define emscripten run command
+    const emrun_cmd = b.addSystemCommand(&[_][]const u8{"emrun"});
+    emrun_cmd.addArg("./web/test.html");
+    emrun_cmd.step.dependOn(b.getInstallStep());
 
-    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
-
-    const exe_unit_tests = b.addTest(.{
-        .root_module = exe_mod,
-    });
-
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
-
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_lib_unit_tests.step);
-    test_step.dependOn(&run_exe_unit_tests.step);
+    const web_run = b.step("web", "Run the app in browser");
+    web_run.dependOn(&emrun_cmd.step);
 }

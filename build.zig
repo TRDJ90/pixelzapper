@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) !void {
         "-Oz",
         "--shell-file=src/shell.html",
         "-sASYNCIFY",
+        "-sUSE_WEBGPU=1",
     });
     emcc_cmd.step.dependOn(&wasm_test.step);
 
@@ -38,12 +39,4 @@ pub fn build(b: *std.Build) !void {
     }
 
     b.getInstallStep().dependOn(&emcc_cmd.step);
-
-    // Define emscripten run command
-    const emrun_cmd = b.addSystemCommand(&[_][]const u8{"emrun"});
-    emrun_cmd.addArg("./web/test.html");
-    emrun_cmd.step.dependOn(b.getInstallStep());
-
-    const web_run = b.step("web", "Run the app in browser");
-    web_run.dependOn(&emrun_cmd.step);
 }

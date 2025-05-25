@@ -5,15 +5,67 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <title>wasm test</title>
+  <style>
+    body {
+      background-color: red;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0px;
+      left: 0px;
+      border: none;
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      display: block;
+    }
+  </style>
 </head>
 
 <body>
+  <canvas id="canvas"></canvas>
   <script type='text/javascript'>
     var Module = {
       print: (function () {
         return (text) => {console.log(text)};
-      })()
+      })(),
+      canvas: (function () {
+        return document.getElementById('canvas');
+      })(),
     };
+
+    preinitWebGPU = async () => {
+      console.log("Preinitializing WebGPU.")
+
+      // Check adapter
+      const adapter = await navigator.gpu.requestAdapter();
+      if (!adapter) {
+        console.error("No adapters found.");
+        return;
+      }
+
+      // Check device
+      const device = await adapter.requestDevice();
+      if (!device) {
+        console.error("No device..");
+        return;
+      }
+
+      device.lost.then((info) => {
+        console.error(`Device lost: ${info.message}`);
+        device = null;
+
+        if (info.reason != 'destroyed') {
+          preinitWebGPU();
+        }
+      });
+
+      Module.preinitializedWebGPUDevice = device;
+    }
+
+    preinitWebGPU();
   </script>
   {{{ SCRIPT }}}
 </body>

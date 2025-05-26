@@ -1,30 +1,32 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("emscripten.h");
-    @cInclude("emscripten/html5.h");
-    @cInclude("emscripten/html5_webgpu.h");
-    @cInclude("webgpu/webgpu.h");
-});
+// const c = @cImport({
+//     @cInclude("webgpu/webgpu.h");
+// });
+
+const platform = @import("platform/web.zig");
+const wgpu = @import("webgpu.zig").wgpu;
+
+const fu = @import("webgpu.zig");
 
 pub const std_options = std.Options{
-    .logFn = log,
+    .logFn = platform.log,
 };
 
 const WGPUContext = struct {
-    instance: c.WGPUInstance = null,
-    device: c.WGPUDevice = null,
-    queue: c.WGPUQueue = null,
-    swapchain: c.WGPUSwapChain = null,
-    pipeline: c.WGPURenderPipeline = null,
+    instance: fu.Instance = null,
+    device: fu.Device = null,
+    queue: fu.Queue = null,
+    swapchain: fu.Swapchain = null,
+    pipeline: fu.RenderPipeline = null,
 };
 
 const Mesh = struct {
-    vertex_buffer: c.WGPUBuffer,
-    index_buffer: c.WGPUBuffer,
+    vertex_buffer: wgpu.WGPUBuffer,
+    index_buffer: wgpu.WGPUBuffer,
 };
 
-var wgpu: WGPUContext = undefined;
+var wgpu_context: WGPUContext = undefined;
 var mesh: Mesh = undefined;
 
 var canvas_width: i32 = 0;
@@ -59,50 +61,50 @@ const wgsl_triangle =
 ;
 
 pub fn main() !void {
-    wgpu.instance = c.wgpuCreateInstance(null);
-    wgpu.device = c.emscripten_webgpu_get_device();
-    wgpu.queue = c.wgpuDeviceGetQueue(wgpu.device);
+    wgpu_context.instance = fu.createInstance(null);
+    wgpu_context.device = platform.getDevice();
+    wgpu_context.queue = fu.deviceGetQueue(wgpu_context.device);
 
     // _ = resize(0, null, null);
 
     // Create triangle shader
-    const shader = c.WGPUShaderModuleWGSLDescriptor{
-        .chain = .{ .sType = c.WGPUSType_ShaderModuleWGSLDescriptor },
+    const shader = wgpu.WGPUShaderModuleWGSLDescriptor{
+        .chain = .{ .sType = wgpu.WGPUSType_ShaderModuleWGSLDescriptor },
         .code = wgsl_triangle,
     };
 
-    const shader_triangle = c.wgpuDeviceCreateShaderModule(wgpu.device, &c.WGPUShaderModuleDescriptor{
+    const shader_triangle = wgpu.wgpuDeviceCreateShaderModule(wgpu_context.device, &wgpu.WGPUShaderModuleDescriptor{
         .nextInChain = @ptrCast(&shader),
         .label = "triangle",
     });
 
     // Describe buffer layouts
-    const vertex_attributes = [2]c.WGPUVertexAttribute{
+    const vertex_attributes = [2]wgpu.WGPUVertexAttribute{
         .{
-            .format = c.WGPUVertexFormat_Float32x2,
+            .format = wgpu.WGPUVertexFormat_Float32x2,
             .offset = 0,
             .shaderLocation = 0,
         },
         .{
-            .format = c.WGPUVertexFormat_Float32x3,
+            .format = wgpu.WGPUVertexFormat_Float32x3,
             .offset = 2 * @sizeOf(f32),
             .shaderLocation = 1,
         },
     };
 
-    const vertex_buffer_layout = c.WGPUVertexBufferLayout{
+    const vertex_buffer_layout = wgpu.WGPUVertexBufferLayout{
         .arrayStride = 5 * @sizeOf(f32),
         .attributeCount = 2,
         .attributes = &vertex_attributes,
     };
 
     // Create pipeline
-    const pipeline_desc: c.WGPURenderPipelineDescriptor = .{
+    const pipeline_desc: wgpu.WGPURenderPipelineDescriptor = .{
         .primitive = .{
-            .frontFace = c.WGPUFrontFace_CCW,
-            .cullMode = c.WGPUCullMode_None,
-            .topology = c.WGPUPrimitiveTopology_TriangleList,
-            .stripIndexFormat = c.WGPUIndexFormat_Undefined,
+            .frontFace = wgpu.WGPUFrontFace_CCW,
+            .cullMode = wgpu.WGPUCullMode_None,
+            .topology = wgpu.WGPUPrimitiveTopology_TriangleList,
+            .stripIndexFormat = wgpu.WGPUIndexFormat_Undefined,
         },
         .vertex = .{
             .module = shader_triangle,
@@ -110,23 +112,23 @@ pub fn main() !void {
             .bufferCount = 1,
             .buffers = &vertex_buffer_layout,
         },
-        .fragment = &c.WGPUFragmentState{
+        .fragment = &wgpu.WGPUFragmentState{
             .module = shader_triangle,
             .entryPoint = "fs_main",
             .targetCount = 1,
-            .targets = &c.WGPUColorTargetState{
-                .format = c.WGPUTextureFormat_BGRA8Unorm,
-                .writeMask = c.WGPUColorWriteMask_All,
-                .blend = &c.WGPUBlendState{
+            .targets = &wgpu.WGPUColorTargetState{
+                .format = wgpu.WGPUTextureFormat_BGRA8Unorm,
+                .writeMask = wgpu.WGPUColorWriteMask_All,
+                .blend = &wgpu.WGPUBlendState{
                     .color = .{
-                        .operation = c.WGPUBlendOperation_Add,
-                        .srcFactor = c.WGPUBlendFactor_One,
-                        .dstFactor = c.WGPUBlendFactor_One,
+                        .operation = wgpu.WGPUBlendOperation_Add,
+                        .srcFactor = wgpu.WGPUBlendFactor_One,
+                        .dstFactor = wgpu.WGPUBlendFactor_One,
                     },
                     .alpha = .{
-                        .operation = c.WGPUBlendOperation_Add,
-                        .srcFactor = c.WGPUBlendFactor_One,
-                        .dstFactor = c.WGPUBlendFactor_One,
+                        .operation = wgpu.WGPUBlendOperation_Add,
+                        .srcFactor = wgpu.WGPUBlendFactor_One,
+                        .dstFactor = wgpu.WGPUBlendFactor_One,
                     },
                 },
             },
@@ -139,10 +141,10 @@ pub fn main() !void {
         .depthStencil = null,
     };
 
-    wgpu.pipeline = c.wgpuDeviceCreateRenderPipeline(wgpu.device, &pipeline_desc);
+    wgpu_context.pipeline = wgpu.wgpuDeviceCreateRenderPipeline(wgpu_context.device, &pipeline_desc);
 
     // Can clean up pipeline creation resources.
-    c.wgpuShaderModuleRelease(shader_triangle);
+    wgpu.wgpuShaderModuleRelease(shader_triangle);
 
     // Create mesh data
     const vertex_data = [_]f32{
@@ -157,51 +159,45 @@ pub fn main() !void {
         0, 2, 3,
     };
 
-    mesh.vertex_buffer = createBuffer(&vertex_data, @sizeOf(@TypeOf(vertex_data)), c.WGPUBufferUsage_Vertex);
-    mesh.index_buffer = createBuffer(&index_data, @sizeOf(@TypeOf(index_data)), c.WGPUBufferUsage_Index);
+    mesh.vertex_buffer = createBuffer(&vertex_data, @sizeOf(@TypeOf(vertex_data)), wgpu.WGPUBufferUsage_Vertex);
+    mesh.index_buffer = createBuffer(&index_data, @sizeOf(@TypeOf(index_data)), wgpu.WGPUBufferUsage_Index);
 
     // Main loop
-    c.emscripten_set_main_loop(draw, 0, true);
+    platform.setMainLoop(draw, 0, true);
 
     // Clean up resources.
 }
 
-fn createBuffer(data: ?*const anyopaque, size: usize, usage: c.WGPUBufferUsage) c.WGPUBuffer {
-    const buffer = c.wgpuDeviceCreateBuffer(wgpu.device, &c.WGPUBufferDescriptor{
-        .usage = @as(c.enum_WGPUBufferUsage, c.WGPUBufferUsage_CopyDst) | usage,
+fn createBuffer(data: ?*const anyopaque, size: usize, usage: wgpu.WGPUBufferUsage) wgpu.WGPUBuffer {
+    const buffer = wgpu.wgpuDeviceCreateBuffer(wgpu_context.device, &wgpu.WGPUBufferDescriptor{
+        .usage = @as(wgpu.enum_WGPUBufferUsage, wgpu.WGPUBufferUsage_CopyDst) | usage,
         .size = size,
     });
 
-    c.wgpuQueueWriteBuffer(wgpu.queue, buffer, 0, data, size);
+    wgpu.wgpuQueueWriteBuffer(wgpu_context.queue, buffer, 0, data, size);
     return buffer;
 }
 
-fn createSwapChain() c.WGPUSwapChain {
+fn createSwapChain() wgpu.WGPUSwapChain {
     std.log.info("Creating swapchain", .{});
 
-    const surface = c.wgpuInstanceCreateSurface(wgpu.instance, &c.WGPUSurfaceDescriptor{
-        .nextInChain = @ptrCast(&c.WGPUSurfaceDescriptorFromCanvasHTMLSelector{
-            .chain = .{ .sType = c.WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector },
-            .selector = "canvas",
-        }),
-    });
-
-    return c.wgpuDeviceCreateSwapChain(wgpu.device, surface, &c.WGPUSwapChainDescriptor{
-        .usage = c.WGPUTextureUsage_RenderAttachment,
-        .format = c.WGPUTextureFormat_BGRA8Unorm,
+    const surface = platform.getSurface(wgpu_context.instance);
+    return wgpu.wgpuDeviceCreateSwapChain(wgpu_context.device, surface, &wgpu.WGPUSwapChainDescriptor{
+        .usage = wgpu.WGPUTextureUsage_RenderAttachment,
+        .format = wgpu.WGPUTextureFormat_BGRA8Unorm,
         .width = @intCast(canvas_width),
         .height = @intCast(canvas_height),
-        .presentMode = c.WGPUPresentMode_Fifo,
+        .presentMode = wgpu.WGPUPresentMode_Fifo,
     });
 }
 
-fn createShaderModule(code: [*:0]const u8, label: [*:0]const u8) c.WGPUShaderModule {
-    const shader: c.WGPUShaderModuleWGSLDescriptor = .{
-        .chain = .{ .sType = c.WGPUSType_ShaderModuleWGSLDescriptor },
+fn createShaderModule(code: [*:0]const u8, label: [*:0]const u8) wgpu.WGPUShaderModule {
+    const shader: wgpu.WGPUShaderModuleWGSLDescriptor = .{
+        .chain = .{ .sType = wgpu.WGPUSType_ShaderModuleWGSLDescriptor },
         .code = code,
     };
 
-    return c.wgpuDeviceCreateShaderModule(wgpu.device, &c.WGPUShaderModuleDescriptor{
+    return wgpu.wgpuDeviceCreateShaderModule(wgpu_context.device, &wgpu.WGPUShaderModuleDescriptor{
         .nextInChain = @ptrCast(&shader),
         .label = label,
     });
@@ -210,16 +206,16 @@ fn createShaderModule(code: [*:0]const u8, label: [*:0]const u8) c.WGPUShaderMod
 fn createRenderPipeline() void {
     std.log.info("Creating renderpipline", .{});
     const shader_module = createShaderModule(wgsl_triangle, "triangle");
-    const color_target = c.WGPUColorTargetState{
-        .format = c.WGPUTextureFormat_BGRA8Unorm,
+    const color_target = wgpu.WGPUColorTargetState{
+        .format = wgpu.WGPUTextureFormat_BGRA8Unorm,
     };
-    const fragment_state = c.WGPUFragmentState{
+    const fragment_state = wgpu.WGPUFragmentState{
         .module = shader_module,
         .targetCount = 1,
         .targets = &color_target,
     };
 
-    const pipeline_desc = c.WGPURenderPipelineDescriptor{
+    const pipeline_desc = wgpu.WGPURenderPipelineDescriptor{
         .vertex = .{ .module = shader_module },
         .fragment = &fragment_state,
         .multisample = .{
@@ -230,16 +226,15 @@ fn createRenderPipeline() void {
         .depthStencil = null,
     };
 
-    wgpu.pipeline = c.wgpuDeviceCreateRenderPipeline(wgpu.device, &pipeline_desc);
+    wgpu_context.pipeline = wgpu.wgpuDeviceCreateRenderPipeline(wgpu_context.device, &pipeline_desc);
 }
 
 fn draw() callconv(.C) void {
-    var width: f64 = 0;
-    var height: f64 = 0;
-    _ = c.emscripten_get_element_css_size("canvas", &width, &height);
+    var new_width: i32 = canvas_width;
+    var new_height: i32 = canvas_height;
 
-    const new_width: i32 = @intFromFloat(width);
-    const new_height: i32 = @intFromFloat(height);
+    // TODO: replace this all with state hold in platform web.
+    platform.getCanvasDimensions(&new_width, &new_height);
 
     // recreate swapchain, if canvas dimensions don't match new dimensions.
     if (canvas_width != new_width or canvas_height != new_height) {
@@ -247,76 +242,76 @@ fn draw() callconv(.C) void {
         canvas_height = new_height;
 
         // Check if swapchain already exist, if so recreate it.
-        if (wgpu.swapchain != null) {
-            c.wgpuSwapChainRelease(wgpu.swapchain);
-            wgpu.swapchain = null;
+        if (wgpu_context.swapchain != null) {
+            wgpu.wgpuSwapChainRelease(wgpu_context.swapchain);
+            wgpu_context.swapchain = null;
         }
 
-        wgpu.swapchain = createSwapChain();
+        wgpu_context.swapchain = createSwapChain();
     }
 
     // Get current framebuffer
-    const framebuffer_view = c.wgpuSwapChainGetCurrentTextureView(wgpu.swapchain);
-    defer c.wgpuTextureViewRelease(framebuffer_view);
+    const framebuffer_view = wgpu.wgpuSwapChainGetCurrentTextureView(wgpu_context.swapchain);
+    defer wgpu.wgpuTextureViewRelease(framebuffer_view);
 
     // Create command encoder
-    const encoder = c.wgpuDeviceCreateCommandEncoder(wgpu.device, null);
-    defer c.wgpuCommandEncoderRelease(encoder);
+    const encoder = wgpu.wgpuDeviceCreateCommandEncoder(wgpu_context.device, null);
+    defer wgpu.wgpuCommandEncoderRelease(encoder);
 
     // Begin render pass
-    const render_pass = c.wgpuCommandEncoderBeginRenderPass(encoder, &c.WGPURenderPassDescriptor{
+    const render_pass = wgpu.wgpuCommandEncoderBeginRenderPass(encoder, &wgpu.WGPURenderPassDescriptor{
         .colorAttachmentCount = 1,
-        .colorAttachments = &c.WGPURenderPassColorAttachment{
+        .colorAttachments = &wgpu.WGPURenderPassColorAttachment{
             .view = framebuffer_view,
-            .loadOp = c.WGPULoadOp_Clear,
-            .storeOp = c.WGPUStoreOp_Store,
-            .clearValue = c.WGPUColor{ .r = 0.2, .g = 0.2, .b = 0.3, .a = 1.0 },
-            .depthSlice = c.WGPU_DEPTH_SLICE_UNDEFINED,
+            .loadOp = wgpu.WGPULoadOp_Clear,
+            .storeOp = wgpu.WGPUStoreOp_Store,
+            .clearValue = wgpu.WGPUColor{ .r = 0.2, .g = 0.2, .b = 0.3, .a = 1.0 },
+            .depthSlice = wgpu.WGPU_DEPTH_SLICE_UNDEFINED,
         },
     });
-    defer c.wgpuRenderPassEncoderRelease(render_pass);
+    defer wgpu.wgpuRenderPassEncoderRelease(render_pass);
 
     // Draw triangle
-    c.wgpuRenderPassEncoderSetPipeline(render_pass, wgpu.pipeline);
-    c.wgpuRenderPassEncoderSetVertexBuffer(render_pass, 0, mesh.vertex_buffer, 0, c.WGPU_WHOLE_SIZE);
-    c.wgpuRenderPassEncoderSetIndexBuffer(render_pass, mesh.index_buffer, c.WGPUIndexFormat_Uint16, 0, c.WGPU_WHOLE_SIZE);
-    c.wgpuRenderPassEncoderDrawIndexed(render_pass, 6, 1, 0, 0, 0);
+    wgpu.wgpuRenderPassEncoderSetPipeline(render_pass, wgpu_context.pipeline);
+    wgpu.wgpuRenderPassEncoderSetVertexBuffer(render_pass, 0, mesh.vertex_buffer, 0, wgpu.WGPU_WHOLE_SIZE);
+    wgpu.wgpuRenderPassEncoderSetIndexBuffer(render_pass, mesh.index_buffer, wgpu.WGPUIndexFormat_Uint16, 0, wgpu.WGPU_WHOLE_SIZE);
+    wgpu.wgpuRenderPassEncoderDrawIndexed(render_pass, 6, 1, 0, 0, 0);
 
     // End render pass
-    c.wgpuRenderPassEncoderEnd(render_pass);
+    wgpu.wgpuRenderPassEncoderEnd(render_pass);
 
     // Create command buffer
-    const cmd_buffer = c.wgpuCommandEncoderFinish(encoder, null);
-    defer c.wgpuCommandBufferRelease(cmd_buffer);
+    const cmd_buffer = wgpu.wgpuCommandEncoderFinish(encoder, null);
+    defer wgpu.wgpuCommandBufferRelease(cmd_buffer);
 
     // submit commands
-    c.wgpuQueueSubmit(wgpu.queue, 1, &cmd_buffer);
+    wgpu.wgpuQueueSubmit(wgpu_context.queue, 1, &cmd_buffer);
 }
 
 // Borrowed from zemscripten.
 // TODO: move to platform layer(?)
-pub fn log(
-    comptime level: std.log.Level,
-    comptime scope: @TypeOf(.EnumLiteral),
-    comptime format: []const u8,
-    args: anytype,
-) void {
-    const level_txt = comptime level.asText();
-    const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
-    const prefix = level_txt ++ prefix2;
+// pub fn log(
+//     comptime level: std.log.Level,
+//     comptime scope: @TypeOf(.EnumLiteral),
+//     comptime format: []const u8,
+//     args: anytype,
+// ) void {
+//     const level_txt = comptime level.asText();
+//     const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
+//     const prefix = level_txt ++ prefix2;
 
-    var buf: [1024]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(buf[0 .. buf.len - 1], prefix ++ format, args) catch |err| {
-        switch (err) {
-            error.NoSpaceLeft => {
-                c.emscripten_console_error("log message too long, skipped.");
-                return;
-            },
-        }
-    };
-    switch (level) {
-        .err => c.emscripten_console_error(@ptrCast(msg.ptr)),
-        .warn => c.emscripten_console_warn(@ptrCast(msg.ptr)),
-        else => c.emscripten_console_log(@ptrCast(msg.ptr)),
-    }
-}
+//     var buf: [1024]u8 = undefined;
+//     const msg = std.fmt.bufPrintZ(buf[0 .. buf.len - 1], prefix ++ format, args) catch |err| {
+//         switch (err) {
+//             error.NoSpaceLeft => {
+//                 c.emscripten_console_error("log message too long, skipped.");
+//                 return;
+//             },
+//         }
+//     };
+//     switch (level) {
+//         .err => c.emscripten_console_error(@ptrCast(msg.ptr)),
+//         .warn => c.emscripten_console_warn(@ptrCast(msg.ptr)),
+//         else => c.emscripten_console_log(@ptrCast(msg.ptr)),
+//     }
+// }

@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) !void {
     wasm_test.linkLibC();
 
     // Hardcode for now path to emscripten includes.
-    const emscripten_include = "/opt/homebrew/Cellar/emscripten/4.0.9/libexec/cache/sysroot/include";
+    const emscripten_include = "/Users/thubie/tools/emsdk/upstream/emscripten/cache/sysroot/include";
     wasm_test.addSystemIncludePath(.{ .cwd_relative = emscripten_include });
 
     // Define emscripten compile command
